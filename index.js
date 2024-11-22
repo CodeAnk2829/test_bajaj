@@ -1,13 +1,23 @@
 require("dotenv").config();
 const express = require("express");
 const multer = require("multer");
-const base64 = require("base64-js");
+const path = require("path");
 
 const app = express();
-const port = process.env.PORT;
+const port = process.env.PORT || 3000;
 
-app.use(express.json()); 
-const upload = multer();
+app.use(express.json());
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/");
+  },
+  filename: (req, file, cb) => {
+    cb(null, Date.now() + path.extname(file.originalname)); 
+  },
+});
+
+const upload = multer({ storage: storage });
 
 function isPrime(num) {
   if (num < 2) return false;
@@ -17,33 +27,28 @@ function isPrime(num) {
   return true;
 }
 
-app.post("/bfhl", upload.none(), (req, res) => {
+app.post("/bfhl", upload.single("file"), (req, res) => {
   try {
-    const { data, file_b64 } = req.body;
-
-    const numbers = data.filter((char) => !isNaN(char));
-    const alphabets = data.filter((char) => isNaN(char));
+    let { data } = req.body;
+    data = JSON.parse(data);
+    const uploadedFile = req.file;
+    
+    const numbers = data ? data.filter((char) => !isNaN(char)) : [];
+    const alphabets = data ? data.filter((char) => isNaN(char)) : [];
     const lowercaseLetters = alphabets.filter(
       (char) => char === char.toLowerCase()
     );
-
     const highestLowercase = lowercaseLetters.sort().reverse()[0] || null;
-
     const primeFound = numbers.some((num) => isPrime(parseInt(num)));
 
     let fileValid = false;
     let mimeType = null;
     let fileSizeKB = null;
 
-    if (file_b64) {
-      try {
-        const fileBuffer = Buffer.from(file_b64, "base64");
-        fileValid = true;
-        mimeType = "image/png"; 
-        fileSizeKB = (fileBuffer.length / 1024).toFixed(2);
-      } catch (error) {
-        fileValid = false;
-      }
+    if (uploadedFile) {
+      fileValid = true;
+      mimeType = uploadedFile.mimetype;
+      fileSizeKB = (uploadedFile.size / 1024).toFixed(2);
     }
 
     const response = {
